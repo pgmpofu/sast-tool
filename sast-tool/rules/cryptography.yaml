@@ -1,0 +1,114 @@
+rules:
+  - id: CRYPTO-001
+    title: Weak Hashing Algorithm - MD5
+    description: >
+      MD5 is cryptographically broken and vulnerable to collision attacks.
+      It should never be used for password hashing or data integrity verification.
+    severity: HIGH
+    category: CRYPTOGRAPHY
+    cwe: CWE-327
+    owasp: "A02:2021 - Cryptographic Failures"
+    languages: ["*"]
+    remediation: >
+      Use SHA-256 or SHA-3 for general hashing. For passwords, use bcrypt, scrypt,
+      Argon2id, or PBKDF2 with a high iteration count.
+    patterns:
+      - regex: "(?i)(hashlib\\.md5|MessageDigest\\.getInstance\\(\"MD5\"\\)|MD5\\.Create\\(\\))"
+        confidence: HIGH
+      - regex: "(?i)import\\s+md5"
+        confidence: HIGH
+
+  - id: CRYPTO-002
+    title: Weak Hashing Algorithm - SHA-1
+    description: >
+      SHA-1 is deprecated for security use. Practical collision attacks exist
+      making it unsuitable for certificate signatures or digital signatures.
+    severity: MEDIUM
+    category: CRYPTOGRAPHY
+    cwe: CWE-327
+    owasp: "A02:2021 - Cryptographic Failures"
+    languages: ["*"]
+    remediation: >
+      Replace SHA-1 with SHA-256 or SHA-3.
+    patterns:
+      - regex: "(?i)(hashlib\\.sha1|MessageDigest\\.getInstance\\(\"SHA-1\"\\))"
+        confidence: HIGH
+
+  - id: CRYPTO-003
+    title: Insecure Random Number Generation
+    description: >
+      A non-cryptographic random number generator is used in a security context.
+      These generators are predictable and unsuitable for tokens or session IDs.
+    severity: HIGH
+    category: CRYPTOGRAPHY
+    cwe: CWE-338
+    owasp: "A02:2021 - Cryptographic Failures"
+    languages: ["*"]
+    remediation: >
+      Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js),
+      or java.security.SecureRandom for all security-sensitive random values.
+    patterns:
+      - regex: "Math\\.random\\(\\)"
+        confidence: MEDIUM
+      - regex: "new\\s+java\\.util\\.Random\\(\\)"
+        confidence: MEDIUM
+
+  - id: CRYPTO-004
+    title: Hardcoded Cryptographic Salt
+    description: >
+      A static or hardcoded salt is used in a hashing or key derivation function.
+      A fixed salt defeats the purpose of salting.
+    severity: HIGH
+    category: CRYPTOGRAPHY
+    cwe: CWE-760
+    owasp: "A02:2021 - Cryptographic Failures"
+    languages: ["*"]
+    remediation: >
+      Generate a unique random salt per password using a CSPRNG.
+      Use bcrypt or Argon2 which handle salting automatically.
+    patterns:
+      - regex: "(?i)\\bsalt\\s*=\\s*[\"'][^\"']{4,}[\"']"
+        confidence: MEDIUM
+
+  - id: CRYPTO-005
+    title: Symmetric Encryption - ECB Mode
+    description: >
+      ECB mode is used for block cipher encryption. ECB encrypts identical
+      plaintext blocks to identical ciphertext, leaking data patterns.
+    severity: HIGH
+    category: CRYPTOGRAPHY
+    cwe: CWE-327
+    owasp: "A02:2021 - Cryptographic Failures"
+    languages: ["*"]
+    remediation: >
+      Use AES-GCM (authenticated encryption) instead of ECB or CBC.
+    patterns:
+      - regex: "AES/ECB"
+        confidence: HIGH
+      - regex: "Cipher\\.getInstance\\(\"AES\"\\)"
+        confidence: HIGH
+      - regex: "modes\\.ECB"
+        confidence: HIGH
+
+  - id: CRYPTO-006
+    title: SSL/TLS Certificate Validation Disabled
+    description: >
+      SSL/TLS certificate verification has been disabled. This allows
+      man-in-the-middle attacks where attackers can intercept encrypted traffic.
+    severity: CRITICAL
+    category: CRYPTOGRAPHY
+    cwe: CWE-295
+    owasp: "A02:2021 - Cryptographic Failures"
+    languages: ["*"]
+    remediation: >
+      Never disable certificate verification in production. Use self-signed
+      certificates with a local CA instead. In Python, never use verify=False.
+    patterns:
+      - regex: "verify\\s*=\\s*False"
+        confidence: HIGH
+      - regex: "ssl\\._create_unverified_context"
+        confidence: HIGH
+      - regex: "VERIFY_NONE"
+        confidence: HIGH
+      - regex: "rejectUnauthorized\\s*:\\s*false"
+        confidence: HIGH

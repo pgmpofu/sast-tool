@@ -1,0 +1,118 @@
+rules:
+  - id: MISC-001
+    title: Path Traversal - Unsanitized File Path
+    description: >
+      User-controlled input is used to construct a file path without sanitization.
+      An attacker can use sequences like ../ to read arbitrary files.
+    severity: HIGH
+    category: PATH_TRAVERSAL
+    cwe: CWE-22
+    owasp: "A01:2021 - Broken Access Control"
+    languages: ["*"]
+    remediation: >
+      Validate file paths against a whitelist of allowed directories using
+      os.path.realpath() or Path.resolve(). Reject paths containing double dots.
+    patterns:
+      - regex: "(?i)(open|readFile|file_get_contents)\\s*\\([^)]*request\\."
+        confidence: HIGH
+      - regex: "(?i)path\\.join\\s*\\([^)]*request\\.(params|query|body)\\."
+        confidence: MEDIUM
+      - regex: "(?i)fs\\.(readFile|createReadStream)\\s*\\([^)]*req\\."
+        confidence: HIGH
+
+  - id: MISC-002
+    title: Debug Mode Enabled
+    description: >
+      The application debug mode is explicitly enabled. Debug mode exposes
+      stack traces, configuration details, and environment variables to users.
+    severity: HIGH
+    category: MISCONFIGURATION
+    cwe: CWE-489
+    owasp: "A05:2021 - Security Misconfiguration"
+    languages: ["python", "javascript", "java"]
+    remediation: >
+      Set DEBUG=False in production. Use environment variables to control debug settings.
+    patterns:
+      - regex: "(?i)DEBUG\\s*=\\s*True"
+        confidence: HIGH
+      - regex: "(?i)app\\.run\\s*\\([^)]*debug\\s*=\\s*True"
+        confidence: HIGH
+
+  - id: MISC-003
+    title: XML External Entity (XXE) Processing
+    description: >
+      The XML parser may be configured to allow external entity expansion.
+      XXE can be used to read local files or perform SSRF attacks.
+    severity: HIGH
+    category: INJECTION
+    cwe: CWE-611
+    owasp: "A05:2021 - Security Misconfiguration"
+    languages: ["*"]
+    remediation: >
+      Disable external entity processing. Use defusedxml in Python.
+      In Java, set XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES to false.
+    patterns:
+      - regex: "(?i)etree\\.parse\\s*\\("
+        confidence: MEDIUM
+      - regex: "(?i)DocumentBuilder\\.parse\\s*\\("
+        confidence: MEDIUM
+      - regex: "(?i)SAXParser\\.parse\\s*\\("
+        confidence: MEDIUM
+
+  - id: MISC-004
+    title: Unrestricted File Upload
+    description: >
+      File uploads appear to lack type validation. Uploading malicious files
+      can lead to remote code execution if the server executes uploaded files.
+    severity: HIGH
+    category: MISCONFIGURATION
+    cwe: CWE-434
+    owasp: "A04:2021 - Insecure Design"
+    languages: ["*"]
+    remediation: >
+      Validate file type by magic bytes (not just extension). Whitelist allowed
+      MIME types. Store uploads outside the web root. Rename files on upload.
+    patterns:
+      - regex: "(?i)request\\.files\\[.*\\]\\.save\\s*\\("
+        confidence: MEDIUM
+
+  - id: MISC-005
+    title: CORS Wildcard Origin
+    description: >
+      The application sets Access-Control-Allow-Origin to * allowing any website
+      to make credentialed cross-origin requests to the API.
+    severity: MEDIUM
+    category: MISCONFIGURATION
+    cwe: CWE-942
+    owasp: "A05:2021 - Security Misconfiguration"
+    languages: ["*"]
+    remediation: >
+      Specify explicit allowed origins. Never use wildcard with credentials.
+    patterns:
+      - regex: "Access-Control-Allow-Origin.*\\*"
+        confidence: HIGH
+      - regex: "(?i)(allow_origins|origins)\\s*=\\s*\\[\"\\*\"\\]"
+        confidence: HIGH
+
+  - id: MISC-006
+    title: Insecure Deserialization
+    description: >
+      The application deserializes data from an untrusted source using an unsafe
+      method. Deserializing malicious payloads can lead to remote code execution.
+    severity: CRITICAL
+    category: INJECTION
+    cwe: CWE-502
+    owasp: "A08:2021 - Software and Data Integrity Failures"
+    languages: ["python", "java", "javascript"]
+    remediation: >
+      Never deserialize untrusted data with pickle. Use yaml.safe_load() instead
+      of yaml.load(). In Java, use look-ahead deserialization filters.
+    patterns:
+      - regex: "(?i)pickle\\.loads?\\s*\\("
+        confidence: HIGH
+      - regex: "(?i)yaml\\.load\\s*\\("
+        confidence: MEDIUM
+      - regex: "(?i)ObjectInputStream\\s*\\("
+        confidence: MEDIUM
+      - regex: "(?i)unserialize\\s*\\("
+        confidence: HIGH

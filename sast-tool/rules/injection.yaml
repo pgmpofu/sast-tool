@@ -1,0 +1,106 @@
+rules:
+  - id: INJ-001
+    title: SQL Injection - String Concatenation
+    description: >
+      User-controlled input is concatenated directly into a SQL query string.
+      This allows an attacker to manipulate the query structure, bypass authentication,
+      extract data, or execute arbitrary commands on the database.
+    severity: CRITICAL
+    category: INJECTION
+    cwe: CWE-89
+    owasp: "A03:2021 - Injection"
+    languages: ["*"]
+    remediation: >
+      Use parameterized queries or prepared statements. Never concatenate user input
+      into SQL strings. Use an ORM where possible.
+    patterns:
+      - regex: "(execute|query|cursor\\.execute|db\\.query)\\s*\\([^)]*\\+[^)]*\\)"
+        confidence: HIGH
+      - regex: "SELECT\\s.+\"\\s*\\+\\s*\\w"
+        confidence: HIGH
+      - regex: "f\"SELECT\\s.+\\{"
+        confidence: HIGH
+      - regex: "WHERE\\s+\\w+\\s*=\\s*\"\\s*\\+"
+        confidence: MEDIUM
+
+  - id: INJ-002
+    title: Command Injection - Shell Execution with User Input
+    description: >
+      Application passes unsanitized user input to a shell command. An attacker
+      can inject shell metacharacters to execute arbitrary OS commands.
+    severity: CRITICAL
+    category: INJECTION
+    cwe: CWE-78
+    owasp: "A03:2021 - Injection"
+    languages: ["*"]
+    remediation: >
+      Avoid shell=True in Python subprocess calls. Use argument arrays instead of
+      string concatenation. Validate and whitelist all inputs used in system calls.
+    patterns:
+      - regex: "subprocess\\.(call|run|Popen|check_output)\\s*\\([^)]*shell\\s*=\\s*True"
+        confidence: HIGH
+      - regex: "os\\.system\\s*\\("
+        confidence: HIGH
+      - regex: "Runtime\\.getRuntime\\(\\)\\.exec\\s*\\("
+        confidence: MEDIUM
+      - regex: "child_process\\.(exec|execSync)\\s*\\([^,)]*\\+"
+        confidence: HIGH
+
+  - id: INJ-003
+    title: XSS - Unsafe HTML Rendering
+    description: >
+      User-controlled data is rendered as raw HTML without sanitization.
+      An attacker can inject malicious scripts that execute in victims browsers.
+    severity: HIGH
+    category: INJECTION
+    cwe: CWE-79
+    owasp: "A03:2021 - Injection"
+    languages: ["javascript", "typescript"]
+    remediation: >
+      Use textContent instead of innerHTML. If HTML output is required, sanitize
+      with DOMPurify before rendering. Use CSP headers.
+    patterns:
+      - regex: "\\.innerHTML\\s*=\\s*[^'\";]"
+        confidence: HIGH
+      - regex: "\\.outerHTML\\s*=\\s*\\w"
+        confidence: HIGH
+      - regex: "document\\.write\\s*\\("
+        confidence: HIGH
+      - regex: "dangerouslySetInnerHTML"
+        confidence: MEDIUM
+
+  - id: INJ-004
+    title: LDAP Injection
+    description: >
+      User input is concatenated into an LDAP filter string without escaping.
+    severity: HIGH
+    category: INJECTION
+    cwe: CWE-90
+    owasp: "A03:2021 - Injection"
+    languages: ["*"]
+    remediation: >
+      Escape special LDAP characters in all user input. Use parameterized LDAP APIs.
+    patterns:
+      - regex: "LdapConnection.*search.*\\+\\s*\\w"
+        confidence: MEDIUM
+
+  - id: INJ-005
+    title: Server-Side Template Injection
+    description: >
+      User-controlled input is passed directly to a template engine for rendering.
+      Server-side template injection can lead to remote code execution.
+    severity: CRITICAL
+    category: INJECTION
+    cwe: CWE-94
+    owasp: "A03:2021 - Injection"
+    languages: ["python", "javascript", "java"]
+    remediation: >
+      Never render user-supplied strings as templates. Pass user data as template
+      variables, not as the template string itself.
+    patterns:
+      - regex: "render_template_string\\s*\\(\\s*\\w+\\s*\\)"
+        confidence: HIGH
+      - regex: "Template\\s*\\(\\s*request\\."
+        confidence: HIGH
+      - regex: "env\\.from_string\\s*\\(\\s*\\w+\\s*\\)"
+        confidence: HIGH

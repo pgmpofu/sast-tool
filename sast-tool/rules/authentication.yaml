@@ -1,0 +1,91 @@
+rules:
+  - id: AUTHN-001
+    title: JWT - Algorithm None Attack Vector
+    description: >
+      The application does not validate the JWT algorithm or accepts the none
+      algorithm. Attackers can craft tokens with alg:none to bypass signature verification.
+    severity: CRITICAL
+    category: AUTHENTICATION
+    cwe: CWE-347
+    owasp: "A07:2021 - Identification and Authentication Failures"
+    languages: ["*"]
+    remediation: >
+      Always specify an explicit list of allowed algorithms when verifying JWTs.
+      Never accept none as a valid algorithm.
+    patterns:
+      - regex: "(?i)jwt\\.decode\\s*\\([^)]*verify\\s*=\\s*False"
+        confidence: HIGH
+      - regex: "(?i)verify_signature\\s*=\\s*False"
+        confidence: HIGH
+
+  - id: AUTHN-002
+    title: Insecure Session Cookie Configuration
+    description: >
+      Session cookies are missing HttpOnly or Secure flags, allowing JavaScript
+      access and transmission over plaintext HTTP.
+    severity: HIGH
+    category: AUTHENTICATION
+    cwe: CWE-614
+    owasp: "A07:2021 - Identification and Authentication Failures"
+    languages: ["python", "javascript", "java"]
+    remediation: >
+      Set HttpOnly=True and Secure=True on all session cookies. Also set
+      SameSite=Strict or Lax to prevent CSRF.
+    patterns:
+      - regex: "(?i)SESSION_COOKIE_HTTPONLY\\s*=\\s*False"
+        confidence: HIGH
+      - regex: "(?i)SESSION_COOKIE_SECURE\\s*=\\s*False"
+        confidence: HIGH
+      - regex: "(?i)httpOnly\\s*:\\s*false"
+        confidence: HIGH
+
+  - id: AUTHN-003
+    title: Weak Password Policy - No Minimum Length
+    description: >
+      Password validation logic appears to accept passwords shorter than 8 characters.
+    severity: MEDIUM
+    category: AUTHENTICATION
+    cwe: CWE-521
+    owasp: "A07:2021 - Identification and Authentication Failures"
+    languages: ["*"]
+    remediation: >
+      Enforce a minimum password length of 12+ characters. Follow NIST SP 800-63B.
+    patterns:
+      - regex: "(?i)(password|passwd)\\.length\\s*[<>]=?\\s*[1-7]\\b"
+        confidence: MEDIUM
+      - regex: "(?i)len\\(password\\)\\s*[<>]=?\\s*[1-7]\\b"
+        confidence: MEDIUM
+
+  - id: AUTHN-004
+    title: Timing Attack in Authentication Comparison
+    description: >
+      Standard equality comparison is used on secret values. Standard comparison
+      short-circuits on the first mismatched byte, leaking timing information.
+    severity: MEDIUM
+    category: AUTHENTICATION
+    cwe: CWE-208
+    owasp: "A07:2021 - Identification and Authentication Failures"
+    languages: ["python", "javascript", "java"]
+    remediation: >
+      Use constant-time comparison: hmac.compare_digest() in Python,
+      crypto.timingSafeEqual() in Node.js.
+    patterns:
+      - regex: "(?i)if\\s+\\w*(token|signature|hmac)\\w*\\s*==\\s*"
+        confidence: MEDIUM
+
+  - id: AUTHN-005
+    title: Insecure Direct Object Reference (IDOR)
+    description: >
+      User-supplied IDs are used directly in database queries without authorization
+      checks. Attackers may access resources belonging to other users.
+    severity: HIGH
+    category: AUTHORIZATION
+    cwe: CWE-639
+    owasp: "A01:2021 - Broken Access Control"
+    languages: ["*"]
+    remediation: >
+      Always verify that the authenticated user has permission to access the
+      requested resource before every data access operation.
+    patterns:
+      - regex: "(?i)(findById|get_by_id|getById)\\s*\\(\\s*request\\.(params|query|body)\\."
+        confidence: MEDIUM
