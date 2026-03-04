@@ -235,6 +235,11 @@ pytest tests/ -v --cov=sast
 
 ---
 
+## Resources
+More information about example vulnerabilities found using this application can be found [https://dev.to/pgmpofu/i-built-a-sast-scanner-from-scratch-and-ran-it-against-4-famous-vulnerable-apps-heres-what-it-1ko](here)
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
