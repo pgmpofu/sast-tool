@@ -1,0 +1,2264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAST Report — /src</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #111118;
+            --surface2: #1a1a24;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #6b6b80;
+            --critical: #ff2d55;
+            --high: #ff6b35;
+            --medium: #ffd60a;
+            --low: #30d158;
+            --info: #64d2ff;
+            --accent: #7b61ff;
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0d0d1a 0%, #1a0d2e 50%, #0d1a1a 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 48px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(123,97,255,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .header-title {
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #fff 30%, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-meta {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-top: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .header-meta span { color: var(--text); }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 40px 48px; }
+
+        .stats-grid {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 100px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+
+        .stat-card.critical::before { background: var(--critical); }
+        .stat-card.high::before { background: var(--high); }
+        .stat-card.medium::before { background: var(--medium); }
+        .stat-card.low::before { background: var(--low); }
+        .stat-card.info::before { background: var(--info); }
+
+        .stat-count { font-size: 2.2rem; font-weight: 800; }
+        .stat-card.critical .stat-count { color: var(--critical); }
+        .stat-card.high .stat-count { color: var(--high); }
+        .stat-card.medium .stat-count { color: var(--medium); }
+        .stat-card.low .stat-count { color: var(--low); }
+        .stat-card.info .stat-count { color: var(--info); }
+
+        .stat-label { font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-dim); margin-top: 4px; font-weight: 600; }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-dim);
+            font-family: 'Syne', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent);
+            color: var(--text);
+            background: rgba(123,97,255,0.1);
+        }
+
+        .finding {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: border-color 0.15s;
+        }
+
+        .finding:hover { border-color: #3a3a50; }
+
+        .finding.severity-critical { border-left: 3px solid var(--critical); }
+        .finding.severity-high { border-left: 3px solid var(--high); }
+        .finding.severity-medium { border-left: 3px solid var(--medium); }
+        .finding.severity-low { border-left: 3px solid var(--low); }
+        .finding.severity-info { border-left: 3px solid var(--info); }
+
+        .finding-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .severity-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+
+        .severity-badge.critical { background: rgba(255,45,85,0.15); color: var(--critical); }
+        .severity-badge.high { background: rgba(255,107,53,0.15); color: var(--high); }
+        .severity-badge.medium { background: rgba(255,214,10,0.15); color: var(--medium); }
+        .severity-badge.low { background: rgba(48,209,88,0.15); color: var(--low); }
+        .severity-badge.info { background: rgba(100,210,255,0.15); color: var(--info); }
+
+        .finding-title { font-weight: 700; font-size: 0.95rem; }
+        .rule-id { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-dim); }
+        .confidence { font-size: 0.72rem; color: var(--text-dim); margin-left: auto; }
+
+        .finding-location {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .file-path { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #64d2ff; }
+        .line-number { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-dim); }
+
+        .badge {
+            font-size: 0.68rem;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        .badge-cwe { background: rgba(123,97,255,0.15); color: #a78bfa; }
+        .badge-owasp { background: rgba(255,107,53,0.12); color: var(--high); }
+
+        .code-snippet {
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            margin-bottom: 12px;
+            color: #a8b4d0;
+        }
+
+        .description { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 14px; line-height: 1.6; }
+
+        .remediation {
+            background: rgba(48,209,88,0.05);
+            border: 1px solid rgba(48,209,88,0.15);
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+
+        .remediation-label { font-size: 0.75rem; font-weight: 700; color: var(--low); letter-spacing: 0.05em; }
+        .remediation p { font-size: 0.85rem; color: var(--text-dim); margin-top: 6px; line-height: 1.6; }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-state .icon { font-size: 3rem; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 1.2rem; color: var(--low); margin-bottom: 8px; }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+            font-size: 0.78rem;
+            border-top: 1px solid var(--border);
+            margin-top: 60px;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">SAST Security Report</div>
+        <div class="header-meta">
+            Target: <span>/src</span> &nbsp;·&nbsp;
+            Scan ID: <span>87c40a1d</span> &nbsp;·&nbsp;
+            Generated: <span>2026-03-03 23:29:10</span> &nbsp;·&nbsp;
+            Files: <span>562 scanned, 0 skipped</span> &nbsp;·&nbsp;
+            Duration: <span>6.70s</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            
+            <div class="stat-card critical">
+                <div class="stat-count">31</div>
+                <div class="stat-label">CRITICAL</div>
+            </div>
+            <div class="stat-card high">
+                <div class="stat-count">61</div>
+                <div class="stat-label">HIGH</div>
+            </div>
+            <div class="stat-card medium">
+                <div class="stat-count">0</div>
+                <div class="stat-label">MEDIUM</div>
+            </div>
+            <div class="stat-card low">
+                <div class="stat-count">0</div>
+                <div class="stat-label">LOW</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-count">0</div>
+                <div class="stat-label">INFO</div>
+            </div>
+        </div>
+
+        <div class="section-title">Findings (92)</div>
+
+        <div class="filters">
+            <button class="filter-btn active" onclick="filterFindings('ALL')">All (92)</button>
+            <button class="filter-btn" onclick="filterFindings('CRITICAL')">Critical (31)</button>
+            <button class="filter-btn" onclick="filterFindings('HIGH')">High (61)</button>
+            <button class="filter-btn" onclick="filterFindings('MEDIUM')">Medium (0)</button>
+            <button class="filter-btn" onclick="filterFindings('LOW')">Low (0)</button>
+            <button class="filter-btn" onclick="filterFindings('INFO')">Info (0)</button>
+        </div>
+
+        <div id="findings-container">
+            
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">Command Injection - Shell Execution with User Input</span>
+                <span class="rule-id">INJ-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/dummy/insecure/framework/VulnerableTaskHolder.java</span>
+                <span class="line-number">line 67</span>
+                <span class="badge badge-cwe">CWE-78</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>Process p = Runtime.getRuntime().exec(taskAction);</code></pre>
+            <p class="description">Application passes unsanitized user input to a shell command. An attacker can inject shell metacharacters to execute arbitrary OS commands.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Avoid shell=True in Python subprocess calls. Use argument arrays instead of string concatenation. Validate and whitelist all inputs used in system calls.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/container/lessons/LessonConnectionInvocationHandler.java</span>
+                <span class="line-number">line 31</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>statement.execute(&quot;SET SCHEMA \&quot;&quot; + user.getUsername() + &quot;\&quot;&quot;);</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/container/users/UserService.java</span>
+                <span class="line-number">line 53</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>jdbcTemplate.execute(&quot;CREATE SCHEMA \&quot;&quot; + webGoatUser.getUsername() + &quot;\&quot; authorization dba&quot;);</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/challenges/challenge5/Assignment5.java</span>
+                <span class="line-number">line 45</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>&quot;select password from challenge_users where userid = '&quot;</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">Private Key Material in Source</span>
+                <span class="rule-id">SEC-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/cryptography/CryptoUtil.java</span>
+                <span class="line-number">line 49</span>
+                <span class="badge badge-cwe">CWE-321</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>String encodedString = &quot;-----BEGIN PRIVATE KEY-----\n&quot;;</code></pre>
+            <p class="description">PEM-encoded private key material detected in source code.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Never commit private keys to version control. Revoke and reissue any exposed keys.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">Private Key Material in Source</span>
+                <span class="rule-id">SEC-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/cryptography/CryptoUtil.java</span>
+                <span class="line-number">line 137</span>
+                <span class="badge badge-cwe">CWE-321</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>privateKeyPem = privateKeyPem.replace(&quot;-----BEGIN PRIVATE KEY-----&quot;, &quot;&quot;);</code></pre>
+            <p class="description">PEM-encoded private key material detected in source code.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Never commit private keys to version control. Revoke and reissue any exposed keys.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">Insecure Deserialization</span>
+                <span class="rule-id">MISC-006</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/deserialization/InsecureDeserializationTask.java</span>
+                <span class="line-number">line 43</span>
+                <span class="badge badge-cwe">CWE-502</span><span class="badge badge-owasp">A08:2021 - Software and Data Integrity Failures</span>
+            </div>
+            <pre class="code-snippet"><code>new ObjectInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(b64token)))) {</code></pre>
+            <p class="description">The application deserializes data from an untrusted source using an unsafe method. Deserializing malicious payloads can lead to remote code execution.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Never deserialize untrusted data with pickle. Use yaml.safe_load() instead of yaml.load(). In Java, use look-ahead deserialization filters.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">Insecure Deserialization</span>
+                <span class="rule-id">MISC-006</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/deserialization/SerializationHelper.java</span>
+                <span class="line-number">line 22</span>
+                <span class="badge badge-cwe">CWE-502</span><span class="badge badge-owasp">A08:2021 - Software and Data Integrity Failures</span>
+            </div>
+            <pre class="code-snippet"><code>ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(data));</code></pre>
+            <p class="description">The application deserializes data from an untrusted source using an unsafe method. Deserializing malicious payloads can lead to remote code execution.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Never deserialize untrusted data with pickle. Use yaml.safe_load() instead of yaml.load(). In Java, use look-ahead deserialization filters.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/jwt/claimmisuse/JWTHeaderKIDEndpoint.java</span>
+                <span class="line-number">line 75</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>.executeQuery(</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/jwt/claimmisuse/JWTHeaderKIDEndpoint.java</span>
+                <span class="line-number">line 76</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>&quot;SELECT key FROM jwt_keys WHERE id = '&quot; + kid + &quot;'&quot;);</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionChallenge.java</span>
+                <span class="line-number">line 55</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>&quot;select userid from sql_challenge_users where userid = '&quot; + username + &quot;'&quot;;</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionLesson6a.java</span>
+                <span class="line-number">line 54</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>query = &quot;SELECT * FROM user_data WHERE last_name = '&quot; + accountName + &quot;'&quot;;</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson10.java</span>
+                <span class="line-number">line 49</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>String query = &quot;SELECT * FROM access_log WHERE action LIKE '%&quot; + action + &quot;%'&quot;;</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson5a.java</span>
+                <span class="line-number">line 41</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>return injectableQuery(account + &quot; &quot; + operator + &quot; &quot; + injection);</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson5a.java</span>
+                <span class="line-number">line 48</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>&quot;SELECT * FROM user_data WHERE first_name = 'John' and last_name = '&quot; + accountName + &quot;'&quot;;</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson5b.java</span>
+                <span class="line-number">line 45</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>String queryString = &quot;SELECT * From user_data WHERE Login_Count = ? and userid= &quot; + accountName;</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson5b.java</span>
+                <span class="line-number">line 66</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>// String query = &quot;SELECT * FROM user_data WHERE Login_Count = &quot; + login_count + &quot; and userid</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson5b.java</span>
+                <span class="line-number">line 66</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>// String query = &quot;SELECT * FROM user_data WHERE Login_Count = &quot; + login_count + &quot; and userid</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson8.java</span>
+                <span class="line-number">line 50</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>&quot;SELECT * FROM employees WHERE last_name = '&quot;</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson9.java</span>
+                <span class="line-number">line 51</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>&quot;SELECT * FROM employees WHERE last_name = '&quot;</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/lessons/sqlinjection/i18n/WebGoatLabels.properties</span>
+                <span class="line-number">line 82</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>SqlStringInjectionHint.10.5=The underlying SQL query looks like that: &quot;SELECT * FROM access_log WHERE action LIKE '%&quot; + action + &quot;%'&quot;.</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 5</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>}({});var B=/(?:\{[\s\S]*\}|\[[\s\S]*\])$/,P=/([A-Z])/g;function R(e,n,r,i){if(x.acceptData(e)){var o,a,s=x.expando,l=e.nodeType,u=l?x.cache:e,c=l?e[s]:e[s]&amp;&amp;s;if(c&amp;&amp;u[c]&amp;&amp;(i||u[c].data)||r!==t||&quot;stri</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 6</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>u[o]&amp;&amp;(delete u[o],c?delete n[l]:typeof n.removeAttribute!==i?n.removeAttribute(l):n[l]=null,p.push(o))}},_evalUrl:function(e){return x.ajax({url:e,type:&quot;GET&quot;,dataType:&quot;script&quot;,async:!1,global:!1,&quot;thr</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-ui-1.10.4.custom.min.js</span>
+                <span class="line-number">line 6</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>(function(e,t){function i(t,i){var a,n,r,o=t.nodeName.toLowerCase();return&quot;area&quot;===o?(a=t.parentNode,n=a.name,t.href&amp;&amp;n&amp;&amp;&quot;map&quot;===a.nodeName.toLowerCase()?(r=e(&quot;img[usemap=#&quot;+n+&quot;]&quot;)[0],!!r&amp;&amp;s(r)):!1):(</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-ui-1.10.4.custom.min.js</span>
+                <span class="line-number">line 7</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>return isNaN(t)?c:t},m=p(d[0]),f=Math.max(m,p(d[1]||&quot;&quot;)),m=s?Math.max(m,s.getFullYear()):m,f=a?Math.min(f,a.getFullYear()):f,e.yearshtml+=&quot;&lt;select class='ui-datepicker-year' data-handler='selectYear' </code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-2.1.4.min.js</span>
+                <span class="line-number">line 2</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>!function(a,b){&quot;object&quot;==typeof module&amp;&amp;&quot;object&quot;==typeof module.exports?module.exports=a.document?b(a,!0):function(a){if(!a.document)throw new Error(&quot;jQuery requires a window with a document&quot;);return </code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-2.1.4.min.js</span>
+                <span class="line-number">line 3</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>return M.access(a,b,c)},removeData:function(a,b){M.remove(a,b)},_data:function(a,b,c){return L.access(a,b,c)},_removeData:function(a,b){L.remove(a,b)}}),n.fn.extend({data:function(a,b){var c,d,e,f=thi</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-2.1.4.min.js</span>
+                <span class="line-number">line 4</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>void 0===c?d&amp;&amp;&quot;get&quot;in d&amp;&amp;null!==(e=d.get(a,b))?e:(e=n.find.attr(a,b),null==e?void 0:e):null!==c?d&amp;&amp;&quot;set&quot;in d&amp;&amp;void 0!==(e=d.set(a,c,b))?e:(a.setAttribute(b,c+&quot;&quot;),c):void n.removeAttr(a,b))},removeAttr</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-ui.min.js</span>
+                <span class="line-number">line 9</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>}},_updateDatepicker:function(e){this.maxRows=4,m=e,e.dpDiv.empty().append(this._generateHTML(e)),this._attachHandlers(e);var i,s=this._getNumberOfMonths(e),n=s[1],a=17,r=e.dpDiv.find(&quot;.&quot;+this._dayOve</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery.min.js</span>
+                <span class="line-number">line 2</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>!function(e,t){&quot;use strict&quot;;&quot;object&quot;==typeof module&amp;&amp;&quot;object&quot;==typeof module.exports?module.exports=e.document?t(e,!0):function(e){if(!e.document)throw new Error(&quot;jQuery requires a window with a docum</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/test/java/org/owasp/webgoat/lessons/jwt/claimmisuse/JWTHeaderKIDEndpointTest.java</span>
+                <span class="line-number">line 41</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>&quot;kid&quot;, &quot;hacked' UNION select '&quot; + key + &quot;' from INFORMATION_SCHEMA.SYSTEM_USERS --&quot;)</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/it/java/org/owasp/webgoat/playwright/webgoat/RegistrationUITest.java</span>
+                <span class="line-number">line 27</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>var password = &quot;password123&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/it/java/org/owasp/webgoat/playwright/webgoat/RegistrationUITest.java</span>
+                <span class="line-number">line 43</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>var password = &quot;password123&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/challenges/SolutionConstants.java</span>
+                <span class="line-number">line 10</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>String PASSWORD = &quot;!!webgoat_admin_1234!!&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Weak Hashing Algorithm - MD5</span>
+                <span class="rule-id">CRYPTO-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/cryptography/HashingAssignment.java</span>
+                <span class="line-number">line 39</span>
+                <span class="badge badge-cwe">CWE-327</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>MessageDigest md = MessageDigest.getInstance(&quot;MD5&quot;);</code></pre>
+            <p class="description">MD5 is cryptographically broken and vulnerable to collision attacks. It should never be used for password hashing or data integrity verification.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use SHA-256 or SHA-3 for general hashing. For passwords, use bcrypt, scrypt, Argon2id, or PBKDF2 with a high iteration count.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/jwt/JWTRefreshEndpoint.java</span>
+                <span class="line-number">line 45</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>public static final String PASSWORD = &quot;bm5nhSkxCXZkKRy4&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/jwt/JWTRefreshEndpoint.java</span>
+                <span class="line-number">line 46</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>private static final String JWT_PASSWORD = &quot;bm5n3SkxCX4kKRy4&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/java/org/owasp/webgoat/lessons/securitymisconfiguration/ActuatorExposureTask.java</span>
+                <span class="line-number">line 28</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>static final String LEAKED_API_KEY = &quot;INTERNAL-API-KEY-987&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/lessons/clientsidefiltering/js/clientSideFiltering.js</span>
+                <span class="line-number">line 6</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>document.getElementById(&quot;employeeRecord&quot;).innerHTML = document.getElementById(newEmployeeID).innerHTML;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/lessons/clientsidefiltering/js/clientSideFiltering.js</span>
+                <span class="line-number">line 38</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>newdiv.innerHTML = html;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 4</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>(function(e,t){var n,r,i=typeof t,o=e.location,a=e.document,s=a.documentElement,l=e.jQuery,u=e.$,c={},p=[],f=&quot;1.10.2&quot;,d=p.concat,h=p.push,g=p.slice,m=p.indexOf,y=c.toString,v=c.hasOwnProperty,b=f.trim</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 4</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>(function(e,t){var n,r,i=typeof t,o=e.location,a=e.document,s=a.documentElement,l=e.jQuery,u=e.$,c={},p=[],f=&quot;1.10.2&quot;,d=p.concat,h=p.push,g=p.slice,m=p.indexOf,y=c.toString,v=c.hasOwnProperty,b=f.trim</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 5</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>}({});var B=/(?:\{[\s\S]*\}|\[[\s\S]*\])$/,P=/([A-Z])/g;function R(e,n,r,i){if(x.acceptData(e)){var o,a,s=x.expando,l=e.nodeType,u=l?x.cache:e,c=l?e[s]:e[s]&amp;&amp;s;if(c&amp;&amp;u[c]&amp;&amp;(i||u[c].data)||r!==t||&quot;stri</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 5</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>}({});var B=/(?:\{[\s\S]*\}|\[[\s\S]*\])$/,P=/([A-Z])/g;function R(e,n,r,i){if(x.acceptData(e)){var o,a,s=x.expando,l=e.nodeType,u=l?x.cache:e,c=l?e[s]:e[s]&amp;&amp;s;if(c&amp;&amp;u[c]&amp;&amp;(i||u[c].data)||r!==t||&quot;stri</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 5</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>}({});var B=/(?:\{[\s\S]*\}|\[[\s\S]*\])$/,P=/([A-Z])/g;function R(e,n,r,i){if(x.acceptData(e)){var o,a,s=x.expando,l=e.nodeType,u=l?x.cache:e,c=l?e[s]:e[s]&amp;&amp;s;if(c&amp;&amp;u[c]&amp;&amp;(i||u[c].data)||r!==t||&quot;stri</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 5</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>}({});var B=/(?:\{[\s\S]*\}|\[[\s\S]*\])$/,P=/([A-Z])/g;function R(e,n,r,i){if(x.acceptData(e)){var o,a,s=x.expando,l=e.nodeType,u=l?x.cache:e,c=l?e[s]:e[s]&amp;&amp;s;if(c&amp;&amp;u[c]&amp;&amp;(i||u[c].data)||r!==t||&quot;stri</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/jquery/jquery-1.10.2.min.js</span>
+                <span class="line-number">line 5</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>}({});var B=/(?:\{[\s\S]*\}|\[[\s\S]*\])$/,P=/([A-Z])/g;function R(e,n,r,i){if(x.acceptData(e)){var o,a,s=x.expando,l=e.nodeType,u=l?x.cache:e,c=l?e[s]:e[s]&amp;&amp;s;if(c&amp;&amp;u[c]&amp;&amp;(i||u[c].data)||r!==t||&quot;stri</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/ace.js</span>
+                <span class="line-number">line 1095</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>element.innerHTML = &quot;&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/ace.js</span>
+                <span class="line-number">line 3500</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>this.getElement().innerHTML = html;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/ace.js</span>
+                <span class="line-number">line 5475</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>this.fontMetrics.$main.innerHTML = (this.line.charAt(this.line.length - 1) == bidiUtil.DOT) ? this.line.substr(0, this.line.length - 1) : this.line;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/ace.js</span>
+                <span class="line-number">line 17320</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>this.$measureNode.innerHTML = lang.stringRepeat(&quot;X&quot;, CHAR_COUNT);</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/ace.js</span>
+                <span class="line-number">line 17409</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>this.$main.innerHTML = lang.stringRepeat(ch, CHAR_COUNT);</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/ace.js</span>
+                <span class="line-number">line 21176</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>w.el.innerHTML = w.html;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/ace.js</span>
+                <span class="line-number">line 21469</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>el.innerHTML = gutterAnno.text.join(&quot;&lt;br&gt;&quot;);</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/ace.js</span>
+                <span class="line-number">line 21587</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>el.innerHTML = &quot;&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-2.1.4.min.js</span>
+                <span class="line-number">line 2</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>!function(a,b){&quot;object&quot;==typeof module&amp;&amp;&quot;object&quot;==typeof module.exports?module.exports=a.document?b(a,!0):function(a){if(!a.document)throw new Error(&quot;jQuery requires a window with a document&quot;);return </code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-2.1.4.min.js</span>
+                <span class="line-number">line 2</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>!function(a,b){&quot;object&quot;==typeof module&amp;&amp;&quot;object&quot;==typeof module.exports?module.exports=a.document?b(a,!0):function(a){if(!a.document)throw new Error(&quot;jQuery requires a window with a document&quot;);return </code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-2.1.4.min.js</span>
+                <span class="line-number">line 3</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>return M.access(a,b,c)},removeData:function(a,b){M.remove(a,b)},_data:function(a,b,c){return L.access(a,b,c)},_removeData:function(a,b){L.remove(a,b)}}),n.fn.extend({data:function(a,b){var c,d,e,f=thi</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-2.1.4.min.js</span>
+                <span class="line-number">line 3</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>return M.access(a,b,c)},removeData:function(a,b){M.remove(a,b)},_data:function(a,b,c){return L.access(a,b,c)},_removeData:function(a,b){L.remove(a,b)}}),n.fn.extend({data:function(a,b){var c,d,e,f=thi</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery-ui-1.10.4.js</span>
+                <span class="line-number">line 12511</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>testElement.innerHTML = &quot;&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery.min.js</span>
+                <span class="line-number">line 2</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>!function(e,t){&quot;use strict&quot;;&quot;object&quot;==typeof module&amp;&amp;&quot;object&quot;==typeof module.exports?module.exports=e.document?t(e,!0):function(e){if(!e.document)throw new Error(&quot;jQuery requires a window with a docum</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery.min.js</span>
+                <span class="line-number">line 2</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>!function(e,t){&quot;use strict&quot;;&quot;object&quot;==typeof module&amp;&amp;&quot;object&quot;==typeof module.exports?module.exports=e.document?t(e,!0):function(e){if(!e.document)throw new Error(&quot;jQuery requires a window with a docum</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery.min.js</span>
+                <span class="line-number">line 2</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>!function(e,t){&quot;use strict&quot;;&quot;object&quot;==typeof module&amp;&amp;&quot;object&quot;==typeof module.exports?module.exports=e.document?t(e,!0):function(e){if(!e.document)throw new Error(&quot;jQuery requires a window with a docum</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/jquery.min.js</span>
+                <span class="line-number">line 2</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>!function(e,t){&quot;use strict&quot;;&quot;object&quot;==typeof module&amp;&amp;&quot;object&quot;==typeof module.exports?module.exports=e.document?t(e,!0):function(e){if(!e.document)throw new Error(&quot;jQuery requires a window with a docum</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/libs/underscore-min.js</span>
+                <span class="line-number">line 6</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>var n=&quot;object&quot;==typeof self&amp;&amp;self.self===self&amp;&amp;self||&quot;object&quot;==typeof global&amp;&amp;global.global===global&amp;&amp;global||Function(&quot;return this&quot;)()||{},e=Array.prototype,i=Object.prototype,p=&quot;undefined&quot;!=typeof S</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/modernizr.min.js</span>
+                <span class="line-number">line 3</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>!function(e,t,n){function r(e){var t=N.className,n=Modernizr._config.classPrefix||&quot;&quot;;if(z&amp;&amp;(t=t.baseVal),Modernizr._config.enableJSClass){var r=new RegExp(&quot;(^|\\s)&quot;+n+&quot;no-js(\\s|$)&quot;);t=t.replace(r,&quot;$1</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/js/quiz.js</span>
+                <span class="line-number">line 34</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>document.getElementById(&quot;q_container&quot;).innerHTML = html;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 1131</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>styleEl.innerHTML = &quot;&lt;b&gt;x&lt;/b&gt;&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 1189</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>el.innerHTML = fragmentStr;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 1206</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>el.innerHTML = fragmentStr;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 2078</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>workingNode.innerHTML = &quot;&amp;#feff;&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 3536</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>element.innerHTML = html5;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 3656</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>clonedTestElement.innerHTML = &quot;&lt;p&gt;&lt;div&gt;&lt;/div&gt;&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 4011</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>tempElement.innerHTML = &quot;&lt;span&gt;&lt;/span&gt;&quot; + _convertUrlsToLinks(textNode.data);</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 4354</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>try { tempElement.innerHTML = html; } catch(e) {}</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 4391</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>tempElement.innerHTML = html;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 4793</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>element.innerHTML = &quot;&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 5313</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>*      sandbox.getWindow().document.body.innerHTML = '&lt;img src=foo.gif onerror=&quot;alert(document.cookie)&quot;&gt;';</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 5456</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>iframeDocument.write(sandboxHtml);</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 5708</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>element.innerHTML = &quot;&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 5750</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>var onlyListItemIsEmpty = list.firstChild ? list.firstChild.innerHTML === &quot;&quot; : true;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 5999</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>try { node.innerHTML = wysihtml5.INVISIBLE_SPACE; } catch(e) {}</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 6202</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>element.innerHTML = wysihtml5.INVISIBLE_SPACE;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 6695</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>try { node.innerHTML = wysihtml5.INVISIBLE_SPACE; } catch(e) {}</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 7531</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>isEmpty = tempElement.innerHTML === &quot;&quot; || tempElement.innerHTML === wysihtml5.INVISIBLE_SPACE;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 7531</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>isEmpty = tempElement.innerHTML === &quot;&quot; || tempElement.innerHTML === wysihtml5.INVISIBLE_SPACE;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 7588</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>isEmpty = tempElement.innerHTML === &quot;&quot; || tempElement.innerHTML === wysihtml5.INVISIBLE_SPACE;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 7588</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>isEmpty = tempElement.innerHTML === &quot;&quot; || tempElement.innerHTML === wysihtml5.INVISIBLE_SPACE;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 7940</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>this.element.innerHTML = browser.displaysCaretInEmptyContentEditableCorrectly() ? &quot;&quot; : this.CARET_HACK;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 7962</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>this.element.innerHTML = html;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/main/resources/webgoat/static/plugins/bootstrap-wysihtml5/js/wysihtml5-0.3.0.js</span>
+                <span class="line-number">line 8056</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>this.element.innerHTML  = this.textarea.getValue(true);</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 src/test/java/org/owasp/webgoat/lessons/spoofcookie/SpoofCookieAssignmentTest.java</span>
+                <span class="line-number">line 53</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>String password = &quot;webgoat&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <footer>
+        Generated by <strong>SAST Tool</strong> · 2026-03-03 23:29:10
+    </footer>
+
+    <script>
+        function filterFindings(severity) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.querySelectorAll('.finding').forEach(el => {
+                if (severity === 'ALL' || el.classList.contains('severity-' + severity.toLowerCase())) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

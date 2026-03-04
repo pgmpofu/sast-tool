@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAST Report — /src</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #111118;
+            --surface2: #1a1a24;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #6b6b80;
+            --critical: #ff2d55;
+            --high: #ff6b35;
+            --medium: #ffd60a;
+            --low: #30d158;
+            --info: #64d2ff;
+            --accent: #7b61ff;
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0d0d1a 0%, #1a0d2e 50%, #0d1a1a 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 48px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(123,97,255,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .header-title {
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #fff 30%, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-meta {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-top: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .header-meta span { color: var(--text); }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 40px 48px; }
+
+        .stats-grid {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 100px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+
+        .stat-card.critical::before { background: var(--critical); }
+        .stat-card.high::before { background: var(--high); }
+        .stat-card.medium::before { background: var(--medium); }
+        .stat-card.low::before { background: var(--low); }
+        .stat-card.info::before { background: var(--info); }
+
+        .stat-count { font-size: 2.2rem; font-weight: 800; }
+        .stat-card.critical .stat-count { color: var(--critical); }
+        .stat-card.high .stat-count { color: var(--high); }
+        .stat-card.medium .stat-count { color: var(--medium); }
+        .stat-card.low .stat-count { color: var(--low); }
+        .stat-card.info .stat-count { color: var(--info); }
+
+        .stat-label { font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-dim); margin-top: 4px; font-weight: 600; }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-dim);
+            font-family: 'Syne', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent);
+            color: var(--text);
+            background: rgba(123,97,255,0.1);
+        }
+
+        .finding {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: border-color 0.15s;
+        }
+
+        .finding:hover { border-color: #3a3a50; }
+
+        .finding.severity-critical { border-left: 3px solid var(--critical); }
+        .finding.severity-high { border-left: 3px solid var(--high); }
+        .finding.severity-medium { border-left: 3px solid var(--medium); }
+        .finding.severity-low { border-left: 3px solid var(--low); }
+        .finding.severity-info { border-left: 3px solid var(--info); }
+
+        .finding-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .severity-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+
+        .severity-badge.critical { background: rgba(255,45,85,0.15); color: var(--critical); }
+        .severity-badge.high { background: rgba(255,107,53,0.15); color: var(--high); }
+        .severity-badge.medium { background: rgba(255,214,10,0.15); color: var(--medium); }
+        .severity-badge.low { background: rgba(48,209,88,0.15); color: var(--low); }
+        .severity-badge.info { background: rgba(100,210,255,0.15); color: var(--info); }
+
+        .finding-title { font-weight: 700; font-size: 0.95rem; }
+        .rule-id { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-dim); }
+        .confidence { font-size: 0.72rem; color: var(--text-dim); margin-left: auto; }
+
+        .finding-location {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .file-path { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #64d2ff; }
+        .line-number { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-dim); }
+
+        .badge {
+            font-size: 0.68rem;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        .badge-cwe { background: rgba(123,97,255,0.15); color: #a78bfa; }
+        .badge-owasp { background: rgba(255,107,53,0.12); color: var(--high); }
+
+        .code-snippet {
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            margin-bottom: 12px;
+            color: #a8b4d0;
+        }
+
+        .description { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 14px; line-height: 1.6; }
+
+        .remediation {
+            background: rgba(48,209,88,0.05);
+            border: 1px solid rgba(48,209,88,0.15);
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+
+        .remediation-label { font-size: 0.75rem; font-weight: 700; color: var(--low); letter-spacing: 0.05em; }
+        .remediation p { font-size: 0.85rem; color: var(--text-dim); margin-top: 6px; line-height: 1.6; }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-state .icon { font-size: 3rem; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 1.2rem; color: var(--low); margin-bottom: 8px; }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+            font-size: 0.78rem;
+            border-top: 1px solid var(--border);
+            margin-top: 60px;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">SAST Security Report</div>
+        <div class="header-meta">
+            Target: <span>/src</span> &nbsp;·&nbsp;
+            Scan ID: <span>1b1be635</span> &nbsp;·&nbsp;
+            Generated: <span>2026-03-03 23:49:00</span> &nbsp;·&nbsp;
+            Files: <span>805 scanned, 0 skipped</span> &nbsp;·&nbsp;
+            Duration: <span>12.62s</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            
+            <div class="stat-card critical">
+                <div class="stat-count">3</div>
+                <div class="stat-label">CRITICAL</div>
+            </div>
+            <div class="stat-card high">
+                <div class="stat-count">63</div>
+                <div class="stat-label">HIGH</div>
+            </div>
+            <div class="stat-card medium">
+                <div class="stat-count">1</div>
+                <div class="stat-label">MEDIUM</div>
+            </div>
+            <div class="stat-card low">
+                <div class="stat-count">0</div>
+                <div class="stat-label">LOW</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-count">0</div>
+                <div class="stat-label">INFO</div>
+            </div>
+        </div>
+
+        <div class="section-title">Findings (67)</div>
+
+        <div class="filters">
+            <button class="filter-btn active" onclick="filterFindings('ALL')">All (67)</button>
+            <button class="filter-btn" onclick="filterFindings('CRITICAL')">Critical (3)</button>
+            <button class="filter-btn" onclick="filterFindings('HIGH')">High (63)</button>
+            <button class="filter-btn" onclick="filterFindings('MEDIUM')">Medium (1)</button>
+            <button class="filter-btn" onclick="filterFindings('LOW')">Low (0)</button>
+            <button class="filter-btn" onclick="filterFindings('INFO')">Info (0)</button>
+        </div>
+
+        <div id="findings-container">
+            
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/dbSchemaChallenge_1.ts</span>
+                <span class="line-number">line 5</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(&quot;SELECT * FROM Products WHERE ((name LIKE '%&quot;+criteria+&quot;%' OR description LIKE '%&quot;+criteria+&quot;%') AND deletedAt IS NULL) ORDER BY name&quot;)</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">SQL Injection - String Concatenation</span>
+                <span class="rule-id">INJ-001</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/dbSchemaChallenge_1.ts</span>
+                <span class="line-number">line 5</span>
+                <span class="badge badge-cwe">CWE-89</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(&quot;SELECT * FROM Products WHERE ((name LIKE '%&quot;+criteria+&quot;%' OR description LIKE '%&quot;+criteria+&quot;%') AND deletedAt IS NULL) ORDER BY name&quot;)</code></pre>
+            <p class="description">User-controlled input is concatenated directly into a SQL query string. This allows an attacker to manipulate the query structure, bypass authentication, extract data, or execute arbitrary commands on the database.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use parameterized queries or prepared statements. Never concatenate user input into SQL strings. Use an ORM where possible.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-critical">
+            <div class="finding-header">
+                <span class="severity-badge critical">CRITICAL</span>
+                <span class="finding-title">Private Key Material in Source</span>
+                <span class="rule-id">SEC-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 lib/insecurity.ts</span>
+                <span class="line-number">line 23</span>
+                <span class="badge badge-cwe">CWE-321</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F</code></pre>
+            <p class="description">PEM-encoded private key material detected in source code.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Never commit private keys to version control. Revoke and reissue any exposed keys.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/datacreator.ts</span>
+                <span class="line-number">line 247</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>for (let i = 0; i &lt; length; i++) { text += possible.charAt(Math.floor(Math.random() * possible.length)) }</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/datacreator.ts</span>
+                <span class="line-number">line 265</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>quantity: product.quantity ?? Math.floor(Math.random() * 70 + 30),</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/datacreator.ts</span>
+                <span class="line-number">line 323</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>product.price = product.price ?? Math.floor(Math.random() * 9 + 1)</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/datacreator.ts</span>
+                <span class="line-number">line 698</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>eta: Math.floor((Math.random() * 5) + 1).toString(),</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/loginAdminChallenge_1.ts</span>
+                <span class="line-number">line 20</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: models.User, plain: true</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/loginAdminChallenge_2.ts</span>
+                <span class="line-number">line 17</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(`SELECT * FROM Users WHERE email = $1 AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`,</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/loginBenderChallenge_1.ts</span>
+                <span class="line-number">line 20</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: models.User, plain: true</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/loginBenderChallenge_3.ts</span>
+                <span class="line-number">line 17</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(`SELECT * FROM Users WHERE email = :mail AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`,</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/loginBenderChallenge_4.ts</span>
+                <span class="line-number">line 17</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: models.User, plain: fals</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/loginJimChallenge_2.ts</span>
+                <span class="line-number">line 17</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: models.User, plain: fals</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 data/static/codefixes/loginJimChallenge_4.ts</span>
+                <span class="line-number">line 20</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: models.User, plain: true</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/app/code-snippet/code-snippet.component.ts</span>
+                <span class="line-number">line 173</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>.map((fix, index) =&gt; ({ fix, index, sort: Math.random() }))</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/app/data-export/data-export.component.ts</span>
+                <span class="line-number">line 71</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>window.open('', '_blank', 'width=500')?.document.write(this.userData)</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/app/login/login.component.ts</span>
+                <span class="line-number">line 61</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>public testingPassword = 'IamUsedForTesting'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 1</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>var dat=dat||{};dat.gui=dat.gui||{};dat.utils=dat.utils||{};dat.controllers=dat.controllers||{};dat.dom=dat.dom||{};dat.color=dat.color||{};dat.utils.css=function(){return{load:function(e,a){a=a||docu</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 13</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>dat.controllers.OptionController=function(e,a,b){var d=function(f,c,e){d.superclass.call(this,f,c);var k=this;this.__select=document.createElement(&quot;select&quot;);if(b.isArray(e)){var l={};b.each(e,function</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 23</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>dat.controllers.FunctionController=function(e,a,b){var d=function(b,c,e){d.superclass.call(this,b,c);var k=this;this.__button=document.createElement(&quot;div&quot;);this.__button.innerHTML=void 0===e?&quot;Fire&quot;:e;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 33</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>dat.GUI=dat.gui.GUI=function(e,a,b,d,f,c,p,k,l,q,n,r,y,g,h){function t(a,c,b,e){if(void 0===c[b])throw Error(&quot;Object &quot;+c+' has no property &quot;'+b+'&quot;');e.color?c=new n(c,b):(c=[c,b].concat(e.factoryArgs)</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 35</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>{before:b.__li.nextElementSibling,factoryArgs:[d]})},name:function(a){b.__li.firstElementChild.firstElementChild.innerHTML=a;return b},listen:function(){b.__gui.listen(b);return b},remove:function(){b</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 40</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>a.load.remembered?h.each(a.load.remembered,function(b,d){E(a,d,d==a.preset)}):E(a,z,!1);g.bind(q,&quot;change&quot;,function(){for(var b=0;b&lt;a.__preset_select.length;b++)a.__preset_select[b].innerHTML=a.__prese</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 41</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>localStorage.getItem(document.location.href+&quot;.isLocal&quot;)&amp;&amp;b.setAttribute(&quot;checked&quot;,&quot;checked&quot;);var k=function(){n.style.display=a.useLocalStorage?&quot;block&quot;:&quot;none&quot;};k();g.bind(b,&quot;change&quot;,function(){a.useLo</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 44</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>function B(a,b){var d={};h.each(a.__rememberedObjects,function(c,e){var f={};h.each(a.__rememberedObjectIndecesToControllers[e],function(a,d){f[d]=b?a.initialValue:a.getValue()});d[e]=f});return d}fun</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 44</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>function B(a,b){var d={};h.each(a.__rememberedObjects,function(c,e){var f={};h.each(a.__rememberedObjectIndecesToControllers[e],function(a,d){f[d]=b?a.initialValue:a.getValue()});d[e]=f});return d}fun</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 48</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>b);c.revert()}},width:{get:function(){return a.width},set:function(b){a.width=b;F(c,b)}},name:{get:function(){return a.name},set:function(b){a.name=b;q&amp;&amp;(q.innerHTML=a.name)}},closed:{get:function(){r</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 48</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>b);c.revert()}},width:{get:function(){return a.width},set:function(b){a.width=b;F(c,b)}},name:{get:function(){return a.name},set:function(b){a.name=b;q&amp;&amp;(q.innerHTML=a.name)}},closed:{get:function(){r</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 49</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>((e=a)?g.bind(window,&quot;unload&quot;,b):g.unbind(window,&quot;unload&quot;,b),localStorage.setItem(document.location.href+&quot;.isLocal&quot;,a))}}});if(h.isUndefined(a.parent)){a.closed=!1;g.addClass(this.domElement,m.CLASS_M</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/dat.gui.min.js</span>
+                <span class="line-number">line 55</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>b-20+&quot;px&quot;):(g.removeClass(a.domElement,m.CLASS_TOO_TALL),a.__ul.style.height=&quot;auto&quot;)}a.__resize_handle&amp;&amp;h.defer(function(){a.__resize_handle.style.height=a.__ul.offsetHeight+&quot;px&quot;});a.__closeButton&amp;&amp;(a</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 6359</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>if (rnd &lt;= 0x02) rnd = 0x2000000 + (Math.random()*0x1000000)|0;</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 6422</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>// (standard Math.random() creates repetitive patterns when applied over larger space)</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 6426</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>return ( 65280 * Math.random() + 255 * Math.random() ) / 65535;</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 6426</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>return ( 65280 * Math.random() + 255 * Math.random() ) / 65535;</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 6434</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>return low + Math.floor( Math.random() * ( high - low + 1 ) );</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 6442</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>return low + Math.random() * ( high - low );</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 6450</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>return range * ( 0.5 - Math.random() );</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 11354</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>e.innerHTML = &quot;Loading ...&quot;;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 11375</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>this.statusDomElement.innerHTML = message;</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 15504</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>this.material = material !== undefined ? material : new THREE.ParticleSystemMaterial( { color: Math.random() * 0xffffff } );</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 15534</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>this.material = material !== undefined ? material : new THREE.LineBasicMaterial( { color: Math.random() * 0xffffff } );</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/assets/private/three.js</span>
+                <span class="line-number">line 15567</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>this.material = material !== undefined ? material : new THREE.MeshBasicMaterial( { color: Math.random() * 0xffffff } );</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/hacking-instructor/helpers/helpers.ts</span>
+                <span class="line-number">line 127</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>if (element &amp;&amp; element.innerHTML === value) {</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/hacking-instructor/index.ts</span>
+                <span class="line-number">line 122</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>textBox.innerHTML = snarkdown(hint.text)</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 frontend/src/hacking-instructor/index.ts</span>
+                <span class="line-number">line 138</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>cancelButton.innerHTML = '&lt;div&gt;&amp;times;&lt;/div&gt;'</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 lib/insecurity.ts</span>
+                <span class="line-number">line 55</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>export const denyAll = () =&gt; expressJwt({ secret: '' + Math.random() } as any)</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 routes/captcha.ts</span>
+                <span class="line-number">line 15</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const firstTerm = Math.floor((Math.random() * 10) + 1)</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 routes/captcha.ts</span>
+                <span class="line-number">line 16</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const secondTerm = Math.floor((Math.random() * 10) + 1)</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 routes/captcha.ts</span>
+                <span class="line-number">line 17</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const thirdTerm = Math.floor((Math.random() * 10) + 1)</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 routes/captcha.ts</span>
+                <span class="line-number">line 19</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const firstOperator = operators[Math.floor((Math.random() * 3))]</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Insecure Random Number Generation</span>
+                <span class="rule-id">CRYPTO-003</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 routes/captcha.ts</span>
+                <span class="line-number">line 20</span>
+                <span class="badge badge-cwe">CWE-338</span><span class="badge badge-owasp">A02:2021 - Cryptographic Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const secondOperator = operators[Math.floor((Math.random() * 3))]</code></pre>
+            <p class="description">A non-cryptographic random number generator is used in a security context. These generators are predictable and unsuitable for tokens or session IDs.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use os.urandom(), the secrets module (Python), crypto.randomBytes() (Node.js), or java.security.SecureRandom for all security-sensitive random values.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 routes/login.ts</span>
+                <span class="line-number">line 34</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: UserModel, plain: true }</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 236</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const password = '123456'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 238</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const secret = 'ASDVAJSDUASZGDIADBJS'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 282</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const password = '123456'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 284</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const secret = 'ASDVAJSDUASZGDIADBJS'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 311</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const password = '123456'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 313</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const secret = 'ASDVAJSDUASZGDIADBJS'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 340</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const password = '123456'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 342</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const secret = 'ASDVAJSDUASZGDIADBJS'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 369</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const password = 'EinBelegtesBrotMitSchinkenSCHINKEN!'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 370</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const totpSecret = 'IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 398</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const password = '123456'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 399</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const totpSecret = 'ASDVAJSDUASZGDIADBJS'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 435</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const password = '123456'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/2faSpec.ts</span>
+                <span class="line-number">line 436</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>const totpSecret = 'ASDVAJSDUASZGDIADBJS'</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-medium">
+            <div class="finding-header">
+                <span class="severity-badge medium">MEDIUM</span>
+                <span class="finding-title">CORS Wildcard Origin</span>
+                <span class="rule-id">MISC-005</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 test/api/httpSpec.ts</span>
+                <span class="line-number">line 15</span>
+                <span class="badge badge-cwe">CWE-942</span><span class="badge badge-owasp">A05:2021 - Security Misconfiguration</span>
+            </div>
+            <pre class="code-snippet"><code>.expect('header', 'Access-Control-Allow-Origin', '\\*')</code></pre>
+            <p class="description">The application sets Access-Control-Allow-Origin to * allowing any website to make credentialed cross-origin requests to the API.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Specify explicit allowed origins. Never use wildcard with credentials.
+</p>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <footer>
+        Generated by <strong>SAST Tool</strong> · 2026-03-03 23:49:00
+    </footer>
+
+    <script>
+        function filterFindings(severity) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.querySelectorAll('.finding').forEach(el => {
+                if (severity === 'ALL' || el.classList.contains('severity-' + severity.toLowerCase())) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

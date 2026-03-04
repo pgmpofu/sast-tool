@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAST Report — /src</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #111118;
+            --surface2: #1a1a24;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #6b6b80;
+            --critical: #ff2d55;
+            --high: #ff6b35;
+            --medium: #ffd60a;
+            --low: #30d158;
+            --info: #64d2ff;
+            --accent: #7b61ff;
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0d0d1a 0%, #1a0d2e 50%, #0d1a1a 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 48px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(123,97,255,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .header-title {
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #fff 30%, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-meta {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-top: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .header-meta span { color: var(--text); }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 40px 48px; }
+
+        .stats-grid {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 100px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+
+        .stat-card.critical::before { background: var(--critical); }
+        .stat-card.high::before { background: var(--high); }
+        .stat-card.medium::before { background: var(--medium); }
+        .stat-card.low::before { background: var(--low); }
+        .stat-card.info::before { background: var(--info); }
+
+        .stat-count { font-size: 2.2rem; font-weight: 800; }
+        .stat-card.critical .stat-count { color: var(--critical); }
+        .stat-card.high .stat-count { color: var(--high); }
+        .stat-card.medium .stat-count { color: var(--medium); }
+        .stat-card.low .stat-count { color: var(--low); }
+        .stat-card.info .stat-count { color: var(--info); }
+
+        .stat-label { font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-dim); margin-top: 4px; font-weight: 600; }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-dim);
+            font-family: 'Syne', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent);
+            color: var(--text);
+            background: rgba(123,97,255,0.1);
+        }
+
+        .finding {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: border-color 0.15s;
+        }
+
+        .finding:hover { border-color: #3a3a50; }
+
+        .finding.severity-critical { border-left: 3px solid var(--critical); }
+        .finding.severity-high { border-left: 3px solid var(--high); }
+        .finding.severity-medium { border-left: 3px solid var(--medium); }
+        .finding.severity-low { border-left: 3px solid var(--low); }
+        .finding.severity-info { border-left: 3px solid var(--info); }
+
+        .finding-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .severity-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+
+        .severity-badge.critical { background: rgba(255,45,85,0.15); color: var(--critical); }
+        .severity-badge.high { background: rgba(255,107,53,0.15); color: var(--high); }
+        .severity-badge.medium { background: rgba(255,214,10,0.15); color: var(--medium); }
+        .severity-badge.low { background: rgba(48,209,88,0.15); color: var(--low); }
+        .severity-badge.info { background: rgba(100,210,255,0.15); color: var(--info); }
+
+        .finding-title { font-weight: 700; font-size: 0.95rem; }
+        .rule-id { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-dim); }
+        .confidence { font-size: 0.72rem; color: var(--text-dim); margin-left: auto; }
+
+        .finding-location {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .file-path { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #64d2ff; }
+        .line-number { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-dim); }
+
+        .badge {
+            font-size: 0.68rem;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        .badge-cwe { background: rgba(123,97,255,0.15); color: #a78bfa; }
+        .badge-owasp { background: rgba(255,107,53,0.12); color: var(--high); }
+
+        .code-snippet {
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            margin-bottom: 12px;
+            color: #a8b4d0;
+        }
+
+        .description { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 14px; line-height: 1.6; }
+
+        .remediation {
+            background: rgba(48,209,88,0.05);
+            border: 1px solid rgba(48,209,88,0.15);
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+
+        .remediation-label { font-size: 0.75rem; font-weight: 700; color: var(--low); letter-spacing: 0.05em; }
+        .remediation p { font-size: 0.85rem; color: var(--text-dim); margin-top: 6px; line-height: 1.6; }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-state .icon { font-size: 3rem; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 1.2rem; color: var(--low); margin-bottom: 8px; }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+            font-size: 0.78rem;
+            border-top: 1px solid var(--border);
+            margin-top: 60px;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">SAST Security Report</div>
+        <div class="header-meta">
+            Target: <span>/src</span> &nbsp;·&nbsp;
+            Scan ID: <span>60636937</span> &nbsp;·&nbsp;
+            Generated: <span>2026-03-03 23:41:54</span> &nbsp;·&nbsp;
+            Files: <span>0 scanned, 0 skipped</span> &nbsp;·&nbsp;
+            Duration: <span>0.00s</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            
+            <div class="stat-card critical">
+                <div class="stat-count">0</div>
+                <div class="stat-label">CRITICAL</div>
+            </div>
+            <div class="stat-card high">
+                <div class="stat-count">0</div>
+                <div class="stat-label">HIGH</div>
+            </div>
+            <div class="stat-card medium">
+                <div class="stat-count">0</div>
+                <div class="stat-label">MEDIUM</div>
+            </div>
+            <div class="stat-card low">
+                <div class="stat-count">0</div>
+                <div class="stat-label">LOW</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-count">0</div>
+                <div class="stat-label">INFO</div>
+            </div>
+        </div>
+
+        <div class="section-title">Findings (0)</div>
+
+        <div class="filters">
+            <button class="filter-btn active" onclick="filterFindings('ALL')">All (0)</button>
+            <button class="filter-btn" onclick="filterFindings('CRITICAL')">Critical (0)</button>
+            <button class="filter-btn" onclick="filterFindings('HIGH')">High (0)</button>
+            <button class="filter-btn" onclick="filterFindings('MEDIUM')">Medium (0)</button>
+            <button class="filter-btn" onclick="filterFindings('LOW')">Low (0)</button>
+            <button class="filter-btn" onclick="filterFindings('INFO')">Info (0)</button>
+        </div>
+
+        <div id="findings-container">
+            <div class="empty-state"><div class="icon">✅</div><h3>No findings detected</h3><p>Clean scan — no security issues found.</p></div>
+        </div>
+    </div>
+
+    <footer>
+        Generated by <strong>SAST Tool</strong> · 2026-03-03 23:41:54
+    </footer>
+
+    <script>
+        function filterFindings(severity) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.querySelectorAll('.finding').forEach(el => {
+                if (severity === 'ALL' || el.classList.contains('severity-' + severity.toLowerCase())) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

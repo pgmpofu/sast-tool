@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAST Report — /src</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #111118;
+            --surface2: #1a1a24;
+            --border: #2a2a3a;
+            --text: #e8e8f0;
+            --text-dim: #6b6b80;
+            --critical: #ff2d55;
+            --high: #ff6b35;
+            --medium: #ffd60a;
+            --low: #30d158;
+            --info: #64d2ff;
+            --accent: #7b61ff;
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0d0d1a 0%, #1a0d2e 50%, #0d1a1a 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 48px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(123,97,255,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .header-title {
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #fff 30%, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-meta {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-top: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .header-meta span { color: var(--text); }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 40px 48px; }
+
+        .stats-grid {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 100px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+
+        .stat-card.critical::before { background: var(--critical); }
+        .stat-card.high::before { background: var(--high); }
+        .stat-card.medium::before { background: var(--medium); }
+        .stat-card.low::before { background: var(--low); }
+        .stat-card.info::before { background: var(--info); }
+
+        .stat-count { font-size: 2.2rem; font-weight: 800; }
+        .stat-card.critical .stat-count { color: var(--critical); }
+        .stat-card.high .stat-count { color: var(--high); }
+        .stat-card.medium .stat-count { color: var(--medium); }
+        .stat-card.low .stat-count { color: var(--low); }
+        .stat-card.info .stat-count { color: var(--info); }
+
+        .stat-label { font-size: 0.7rem; letter-spacing: 0.1em; color: var(--text-dim); margin-top: 4px; font-weight: 600; }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-dim);
+            font-family: 'Syne', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent);
+            color: var(--text);
+            background: rgba(123,97,255,0.1);
+        }
+
+        .finding {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: border-color 0.15s;
+        }
+
+        .finding:hover { border-color: #3a3a50; }
+
+        .finding.severity-critical { border-left: 3px solid var(--critical); }
+        .finding.severity-high { border-left: 3px solid var(--high); }
+        .finding.severity-medium { border-left: 3px solid var(--medium); }
+        .finding.severity-low { border-left: 3px solid var(--low); }
+        .finding.severity-info { border-left: 3px solid var(--info); }
+
+        .finding-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .severity-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+
+        .severity-badge.critical { background: rgba(255,45,85,0.15); color: var(--critical); }
+        .severity-badge.high { background: rgba(255,107,53,0.15); color: var(--high); }
+        .severity-badge.medium { background: rgba(255,214,10,0.15); color: var(--medium); }
+        .severity-badge.low { background: rgba(48,209,88,0.15); color: var(--low); }
+        .severity-badge.info { background: rgba(100,210,255,0.15); color: var(--info); }
+
+        .finding-title { font-weight: 700; font-size: 0.95rem; }
+        .rule-id { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-dim); }
+        .confidence { font-size: 0.72rem; color: var(--text-dim); margin-left: auto; }
+
+        .finding-location {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .file-path { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #64d2ff; }
+        .line-number { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-dim); }
+
+        .badge {
+            font-size: 0.68rem;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        .badge-cwe { background: rgba(123,97,255,0.15); color: #a78bfa; }
+        .badge-owasp { background: rgba(255,107,53,0.12); color: var(--high); }
+
+        .code-snippet {
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            margin-bottom: 12px;
+            color: #a8b4d0;
+        }
+
+        .description { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 14px; line-height: 1.6; }
+
+        .remediation {
+            background: rgba(48,209,88,0.05);
+            border: 1px solid rgba(48,209,88,0.15);
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+
+        .remediation-label { font-size: 0.75rem; font-weight: 700; color: var(--low); letter-spacing: 0.05em; }
+        .remediation p { font-size: 0.85rem; color: var(--text-dim); margin-top: 6px; line-height: 1.6; }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-state .icon { font-size: 3rem; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 1.2rem; color: var(--low); margin-bottom: 8px; }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+            font-size: 0.78rem;
+            border-top: 1px solid var(--border);
+            margin-top: 60px;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">SAST Security Report</div>
+        <div class="header-meta">
+            Target: <span>/src</span> &nbsp;·&nbsp;
+            Scan ID: <span>8749b622</span> &nbsp;·&nbsp;
+            Generated: <span>2026-03-04 04:00:06</span> &nbsp;·&nbsp;
+            Files: <span>189 scanned, 0 skipped</span> &nbsp;·&nbsp;
+            Duration: <span>1.17s</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            
+            <div class="stat-card critical">
+                <div class="stat-count">0</div>
+                <div class="stat-label">CRITICAL</div>
+            </div>
+            <div class="stat-card high">
+                <div class="stat-count">12</div>
+                <div class="stat-label">HIGH</div>
+            </div>
+            <div class="stat-card medium">
+                <div class="stat-count">2</div>
+                <div class="stat-label">MEDIUM</div>
+            </div>
+            <div class="stat-card low">
+                <div class="stat-count">0</div>
+                <div class="stat-label">LOW</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-count">0</div>
+                <div class="stat-label">INFO</div>
+            </div>
+        </div>
+
+        <div class="section-title">Findings (14)</div>
+
+        <div class="filters">
+            <button class="filter-btn active" onclick="filterFindings('ALL')">All (14)</button>
+            <button class="filter-btn" onclick="filterFindings('CRITICAL')">Critical (0)</button>
+            <button class="filter-btn" onclick="filterFindings('HIGH')">High (12)</button>
+            <button class="filter-btn" onclick="filterFindings('MEDIUM')">Medium (2)</button>
+            <button class="filter-btn" onclick="filterFindings('LOW')">Low (0)</button>
+            <button class="filter-btn" onclick="filterFindings('INFO')">Info (0)</button>
+        </div>
+
+        <div id="findings-container">
+            
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/authbypass/authbypass.js</span>
+                <span class="line-number">line 43</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>cell0.innerHTML = user['user_id'] + '&lt;input type=&quot;hidden&quot; id=&quot;user_id_' + user['user_id'] + '&quot; name=&quot;user_id&quot; value=&quot;' + user['user_id'] + '&quot; /&gt;';</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/authbypass/authbypass.js</span>
+                <span class="line-number">line 45</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>cell1.innerHTML = '&lt;input type=&quot;text&quot; id=&quot;first_name_' + user['user_id'] + '&quot; name=&quot;first_name&quot; value=&quot;' + user['first_name'] + '&quot; /&gt;';</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/authbypass/authbypass.js</span>
+                <span class="line-number">line 47</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>cell2.innerHTML = '&lt;input type=&quot;text&quot; id=&quot;surname_' + user['user_id'] + '&quot; name=&quot;surname&quot; value=&quot;' + user['surname'] + '&quot; /&gt;';</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/authbypass/authbypass.js</span>
+                <span class="line-number">line 49</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>cell3.innerHTML = '&lt;input type=&quot;button&quot; value=&quot;Update&quot; onclick=&quot;submit_change(' + user['user_id'] + ')&quot; /&gt;';</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/captcha/source/high.php</span>
+                <span class="line-number">line 30</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>$insert = &quot;UPDATE `users` SET password = '$pass_new' WHERE user = '&quot; . dvwaCurrentUser() . &quot;' LIMIT 1;&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/captcha/source/low.php</span>
+                <span class="line-number">line 60</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>$insert = &quot;UPDATE `users` SET password = '$pass_new' WHERE user = '&quot; . dvwaCurrentUser() . &quot;';&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/captcha/source/medium.php</span>
+                <span class="line-number">line 68</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>$insert = &quot;UPDATE `users` SET password = '$pass_new' WHERE user = '&quot; . dvwaCurrentUser() . &quot;';&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/csp/source/high.js</span>
+                <span class="line-number">line 9</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>document.getElementById(&quot;answer&quot;).innerHTML = obj['answer'];</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">XSS - Unsafe HTML Rendering</span>
+                <span class="rule-id">INJ-003</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/csp/source/impossible.js</span>
+                <span class="line-number">line 9</span>
+                <span class="badge badge-cwe">CWE-79</span><span class="badge badge-owasp">A03:2021 - Injection</span>
+            </div>
+            <pre class="code-snippet"><code>document.getElementById(&quot;answer&quot;).innerHTML = obj['answer'];</code></pre>
+            <p class="description">User-controlled data is rendered as raw HTML without sanitization. An attacker can inject malicious scripts that execute in victims browsers.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Use textContent instead of innerHTML. If HTML output is required, sanitize with DOMPurify before rendering. Use CSP headers.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/csrf/source/low.php</span>
+                <span class="line-number">line 16</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>$insert = &quot;UPDATE `users` SET password = '$pass_new' WHERE user = '&quot; . $current_user . &quot;';&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/csrf/source/medium.php</span>
+                <span class="line-number">line 18</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>$insert = &quot;UPDATE `users` SET password = '$pass_new' WHERE user = '&quot; . $current_user . &quot;';&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-high">
+            <div class="finding-header">
+                <span class="severity-badge high">HIGH</span>
+                <span class="finding-title">Hardcoded Generic Secret or Password</span>
+                <span class="rule-id">SEC-002</span>
+                <span class="confidence">confidence: MEDIUM</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/sqli/test.php</span>
+                <span class="line-number">line 4</span>
+                <span class="badge badge-cwe">CWE-798</span><span class="badge badge-owasp">A07:2021 - Identification and Authentication Failures</span>
+            </div>
+            <pre class="code-snippet"><code>$password = &quot;password&quot;;</code></pre>
+            <p class="description">A variable with a sensitive-sounding name has been assigned a hardcoded string value.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Store secrets in environment variables or a secrets manager. Never commit credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-medium">
+            <div class="finding-header">
+                <span class="severity-badge medium">MEDIUM</span>
+                <span class="finding-title">CORS Wildcard Origin</span>
+                <span class="rule-id">MISC-005</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/api/gen_openapi.php</span>
+                <span class="line-number">line 6</span>
+                <span class="badge badge-cwe">CWE-942</span><span class="badge badge-owasp">A05:2021 - Security Misconfiguration</span>
+            </div>
+            <pre class="code-snippet"><code>header(&quot;Access-Control-Allow-Origin: *&quot;);</code></pre>
+            <p class="description">The application sets Access-Control-Allow-Origin to * allowing any website to make credentialed cross-origin requests to the API.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Specify explicit allowed origins. Never use wildcard with credentials.
+</p>
+            </div>
+        </div>
+        <div class="finding severity-medium">
+            <div class="finding-header">
+                <span class="severity-badge medium">MEDIUM</span>
+                <span class="finding-title">CORS Wildcard Origin</span>
+                <span class="rule-id">MISC-005</span>
+                <span class="confidence">confidence: HIGH</span>
+            </div>
+            <div class="finding-location">
+                <span class="file-path">📄 vulnerabilities/api/public/index.php</span>
+                <span class="line-number">line 11</span>
+                <span class="badge badge-cwe">CWE-942</span><span class="badge badge-owasp">A05:2021 - Security Misconfiguration</span>
+            </div>
+            <pre class="code-snippet"><code>header(&quot;Access-Control-Allow-Origin: *&quot;);</code></pre>
+            <p class="description">The application sets Access-Control-Allow-Origin to * allowing any website to make credentialed cross-origin requests to the API.
+</p>
+            <div class="remediation">
+                <span class="remediation-label">🔧 Remediation</span>
+                <p>Specify explicit allowed origins. Never use wildcard with credentials.
+</p>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <footer>
+        Generated by <strong>SAST Tool</strong> · 2026-03-04 04:00:06
+    </footer>
+
+    <script>
+        function filterFindings(severity) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.querySelectorAll('.finding').forEach(el => {
+                if (severity === 'ALL' || el.classList.contains('severity-' + severity.toLowerCase())) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
